@@ -125,6 +125,15 @@ static lv_timer_t *page_wifi_apply_settings_timer = NULL;
 static lv_timer_t *page_wifi_apply_settings_pending_timer = NULL;
 static bool page_wifi_bootup_pending = true;
 
+static void enable_ntpd() {
+    FILE *fp = NULL;
+    if ((fp = fopen("/etc/ntp.conf", "w"))) {
+        fprintf(fp, "server pl.pool.ntp.org\n");
+        fclose(fp);
+    }
+    system_exec("ntpd");
+}
+
 /**
  * Refresh WiFi service configuration parameters.
  */
@@ -340,6 +349,7 @@ static void page_wifi_update_settings() {
 
         if (g_setting.wifi.ssh) {
             system_exec("dropbear");
+            enable_ntpd();
         }
     }
 }
