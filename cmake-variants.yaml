@@ -1,0 +1,35 @@
+buildType:
+    default: debug
+    choices:
+        debug:
+            short: Debug
+            buildType: Debug
+        release:
+            short: Release
+            buildType: Release
+goggles:
+    default: 'v1'
+    choices:
+        v1:
+            short: Goggle-v1
+            settings:
+                HDZ_GOGGLE: ON
+        v2:
+            short: Goggle-v2
+            settings:
+                HDZ_GOGGLE2: ON
+        boxpro:
+            short: BoxPro
+            settings:
+                HDZ_BOXPRO: ON
+emulator:
+    default: 'on'
+    choices:
+        on:
+            short: EmuOn
+            settings:
+                EMULATOR_BUILD: ON
+        off:
+            short: EmuOff
+            settings:
+                EMULATOR_BUILD: OFF
