@@ -239,7 +239,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
                          LV_GRID_ALIGN_CENTER, 0, 1);
 
     lv_obj_t *label2 = lv_label_create(cont1);
-    snprintf(buf, sizeof(buf), "%s\n %s\n %s",
+    snprintf(buf, sizeof(buf), "%s\n%s\n%s",
              _lang("When scanning is complete, use the"),
              _lang("dial to select a channel and press"),
              _lang("the Enter button to choose"));
