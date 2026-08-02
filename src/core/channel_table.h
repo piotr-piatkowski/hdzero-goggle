@@ -29,7 +29,7 @@ int channel_msp_index(const channel_def_t *def); // 0..CHANNEL_DEF_COUNT-1
 // Defaults are compiled in; channel_sets_load() may override them from an
 // SD-card file at boot (see channel_table.c).
 #define MAX_CHANNEL_SET_SIZE 12
-#define MAX_CHANNEL_SETS     3 // hard cap: the Source page's btn_group widget can't show more than 3 options
+#define MAX_CHANNEL_SETS     16 // the Source page picks this via a dropdown, so no small hard UI cap is needed
 #define MAX_CHANNEL_SET_NAME_LEN 3 // e.g. "R1", "F4" -- longest channel name plus NUL
 
 typedef struct {

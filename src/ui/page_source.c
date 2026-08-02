@@ -115,7 +115,11 @@ static lv_coord_t row_dsc[] = {UI_SOURCE_ROWS};
 static lv_obj_t *label[6] = {NULL};
 static uint8_t oled_tst_mode = 0; // 0=Normal, 1=CB, 2=Grid, 3=All Black, 4=All White, 5=Boot logo
 static bool in_sourcepage = false;
-static btn_group_t btn_group0, btn_group1, btn_group2, btn_group3;
+static btn_group_t btn_group0, btn_group2, btn_group3;
+
+static lv_obj_t *hdz_band_dropdown;
+static bool hdz_band_dropdown_open;
+static uint16_t hdz_band_prev_sel;
 
 static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     char buf[128];
@@ -152,12 +156,19 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     snprintf(buf, sizeof(buf), "AV %s", _lang("In"));
     label[3] = create_label_item(cont, buf, 1, ROW_AV, 3);
 
+    snprintf(buf, sizeof(buf), "%s:", _lang("Channels"));
+    create_label_item(cont, buf, 1, ROW_HDZ_BAND, 2);
     {
-        const char *set_label1 = g_channel_set_count > 1 ? g_channel_sets[1].label : "";
-        const char *set_label2 = g_channel_set_count > 2 ? g_channel_sets[2].label : "";
-        create_btn_group_item(&btn_group1, cont, g_channel_set_count, _lang("HDZero Band"),
-                               _lang(g_channel_sets[0].label), _lang(set_label1), _lang(set_label2), "", ROW_HDZ_BAND);
-        btn_group_set_sel(&btn_group1, g_setting.source.hdzero_channel_set);
+        char options[MAX_CHANNEL_SETS * 32] = "";
+        for (uint8_t i = 0; i < g_channel_set_count; i++) {
+            strcat(options, _lang(g_channel_sets[i].label));
+            if (i < g_channel_set_count - 1) {
+                strcat(options, "\n");
+            }
+        }
+        hdz_band_dropdown = create_dropdown_item(cont, options, 2, ROW_HDZ_BAND, UI_INPUT_DROPDOWN_WIDTH,
+                                                  row_dsc[ROW_HDZ_BAND], 2, 10, LV_GRID_ALIGN_START, UI_PAGE_TEXT_FONT);
+        lv_dropdown_set_selected(hdz_band_dropdown, g_setting.source.hdzero_channel_set);
     }
 
     create_btn_group_item(&btn_group2, cont, 2, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), "", "", ROW_HDZ_WIDTH);
@@ -312,6 +323,30 @@ void source_cycle() {
     Analog_Module_Power(0);
 }
 
+static void accept_hdz_band_dropdown(void) {
+    g_setting.source.hdzero_channel_set = lv_dropdown_get_selected(hdz_band_dropdown);
+    if (g_setting.scan.channel > channel_set_size(g_setting.source.hdzero_channel_set)) {
+        g_setting.scan.channel = 1;
+    }
+    page_scannow_set_channel_label();
+    ini_putl("source", "hdzero_band", g_setting.source.hdzero_channel_set, SETTING_INI);
+
+    // Syncs the dropdown's own displayed text to the new selection (LVGL only
+    // does this internally in response to LV_EVENT_RELEASED, which our synthetic
+    // dial-driven navigation never sends).
+    lv_event_send(hdz_band_dropdown, LV_EVENT_RELEASED, NULL);
+    lv_dropdown_close(hdz_band_dropdown);
+    hdz_band_dropdown_open = false;
+    app_state_push(APP_STATE_SUBMENU);
+}
+
+// Reverts an opened-but-unconfirmed dropdown back to the current setting (no save).
+static void cancel_hdz_band_dropdown(void) {
+    lv_dropdown_set_selected(hdz_band_dropdown, hdz_band_prev_sel);
+    lv_dropdown_close(hdz_band_dropdown);
+    hdz_band_dropdown_open = false;
+}
+
 static void page_source_on_click(uint8_t key, int sel) {
     switch (sel) {
     case ROW_HDZERO:
@@ -327,13 +362,17 @@ static void page_source_on_click(uint8_t key, int sel) {
         page_source_select_av_in();
         break;
     case ROW_HDZ_BAND:
-        btn_group_toggle_sel(&btn_group1);
-        g_setting.source.hdzero_channel_set = btn_group_get_sel(&btn_group1);
-        if (g_setting.scan.channel > channel_set_size(g_setting.source.hdzero_channel_set)) {
-            g_setting.scan.channel = 1;
+        if (hdz_band_dropdown_open) {
+            accept_hdz_band_dropdown();
+        } else {
+            hdz_band_prev_sel = lv_dropdown_get_selected(hdz_band_dropdown);
+            lv_dropdown_open(hdz_band_dropdown);
+            lv_obj_t *const list = lv_dropdown_get_list(hdz_band_dropdown);
+            lv_obj_add_style(list, &style_dropdown, LV_PART_MAIN);
+            lv_obj_set_style_text_color(list, lv_color_make(0, 0, 0), LV_PART_SELECTED | LV_STATE_CHECKED);
+            hdz_band_dropdown_open = true;
+            app_state_push(APP_STATE_SUBMENU_ITEM_FOCUSED);
         }
-        page_scannow_set_channel_label();
-        ini_putl("source", "hdzero_band", g_setting.source.hdzero_channel_set, SETTING_INI);
         break;
     case ROW_HDZ_WIDTH:
         btn_group_toggle_sel(&btn_group2);
@@ -373,12 +412,23 @@ static void page_source_on_click(uint8_t key, int sel) {
     Analog_Module_Power(0);
 }
 
+static void page_source_on_roller(uint8_t key) {
+    if (!hdz_band_dropdown_open) {
+        return;
+    }
+    uint32_t evt = (key == DIAL_KEY_DOWN) ? LV_KEY_UP : LV_KEY_DOWN;
+    lv_event_send(hdz_band_dropdown, LV_EVENT_KEY, &evt);
+}
+
 static void page_source_enter() {
     in_sourcepage = true;
 }
 
 static void page_source_exit() {
     // LOGI("page_source_exit %d",oled_tst_mode);
+    if (hdz_band_dropdown_open) {
+        cancel_hdz_band_dropdown();
+    }
     if ((oled_tst_mode != 0) && g_setting.storage.selftest) {
         screen.pattern(0, 0, 4);
         oled_tst_mode = 0;
@@ -397,7 +447,7 @@ page_pack_t pp_source = {
     .exit = page_source_exit,
     .on_created = NULL,
     .on_update = NULL,
-    .on_roller = NULL,
+    .on_roller = page_source_on_roller,
     .on_click = page_source_on_click,
     .on_right_button = NULL,
 };
