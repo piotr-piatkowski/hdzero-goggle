@@ -26,17 +26,25 @@ const channel_def_t *channel_by_msp_index(uint8_t msp_index);
 int channel_msp_index(const channel_def_t *def); // 0..CHANNEL_DEF_COUNT-1
 
 // User-selectable predefined lists of channels (e.g. "Race Band", "Racing L+R").
+// Defaults are compiled in; channel_sets_load() may override them from an
+// SD-card file at boot (see channel_table.c).
 #define MAX_CHANNEL_SET_SIZE 12
 #define MAX_CHANNEL_SETS     3 // hard cap: the Source page's btn_group widget can't show more than 3 options
+#define MAX_CHANNEL_SET_NAME_LEN 3 // e.g. "R1", "F4" -- longest channel name plus NUL
 
 typedef struct {
-    const char *label;
+    char label[24];
     uint8_t count;
-    const char *names[MAX_CHANNEL_SET_SIZE];
+    char names[MAX_CHANNEL_SET_SIZE][MAX_CHANNEL_SET_NAME_LEN + 1];
 } channel_set_t;
 
-extern const channel_set_t g_channel_sets[];
-extern const uint8_t g_channel_set_count; // number of entries actually defined in g_channel_sets, <= MAX_CHANNEL_SETS
+extern channel_set_t g_channel_sets[MAX_CHANNEL_SETS];
+extern uint8_t g_channel_set_count; // number of entries actually populated in g_channel_sets, <= MAX_CHANNEL_SETS
+
+// Populates g_channel_sets/g_channel_set_count, either by parsing
+// CHANNEL_SETS_FILE from the SD card or, if that's missing/invalid, from the
+// compiled-in defaults. Call once at boot before anything reads g_channel_sets.
+void channel_sets_load(void);
 
 uint8_t channel_set_size(uint8_t set_index);
 const char *channel_set_channel_name(uint8_t set_index, uint8_t ch /* 1-based */);

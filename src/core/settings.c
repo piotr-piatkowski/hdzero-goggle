@@ -343,6 +343,8 @@ void settings_load(void) {
     // Start with a fully configured structure then update!
     memcpy(&g_setting, &g_setting_defaults, sizeof(g_setting));
 
+    channel_sets_load(); // must run before anything below reads g_channel_set_count
+
     // scan
     g_setting.scan.channel = ini_getl("scan", "channel", g_setting_defaults.scan.channel, SETTING_INI);
 

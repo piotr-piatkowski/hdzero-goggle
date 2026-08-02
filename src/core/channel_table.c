@@ -1,6 +1,10 @@
 #include "channel_table.h"
 
+#include <ctype.h>
+#include <stdio.h>
 #include <string.h>
+
+#include <log/log.h>
 
 // hw_index is 0-based, matching what DM6302_SetChannel() actually expects
 // (existing callers always pass `g_setting.scan.channel - 1`); it is the
@@ -29,17 +33,18 @@ const channel_def_t g_channel_defs[CHANNEL_DEF_COUNT] = {
     {"L5", 5510,  1,  4}, {"L6", 5547,  1,  5}, {"L7", 5584,  1,  6}, {"L8", 5621,  1,  7},
 };
 
-const channel_set_t g_channel_sets[] = {
+static const channel_set_t default_channel_sets[] = {
     {"Race Band", 12, {"R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "E1", "F1", "F2", "F4"}},
     {"Low Band",   8, {"L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"}},
     {"Racing L+R",10, {"R1", "R2", "R3", "R5", "R7", "R8", "F2", "F4", "L7", "L8"}},
 };
 // clang-format on
 
-const uint8_t g_channel_set_count = sizeof(g_channel_sets) / sizeof(g_channel_sets[0]);
+_Static_assert(sizeof(default_channel_sets) / sizeof(default_channel_sets[0]) <= MAX_CHANNEL_SETS,
+               "too many default channel sets for the Source page's btn_group widget");
 
-_Static_assert(sizeof(g_channel_sets) / sizeof(g_channel_sets[0]) <= MAX_CHANNEL_SETS,
-               "too many channel sets for the Source page's btn_group widget");
+channel_set_t g_channel_sets[MAX_CHANNEL_SETS];
+uint8_t g_channel_set_count;
 
 const channel_def_t *channel_by_name(const char *name) {
     for (int i = 0; i < CHANNEL_DEF_COUNT; i++) {
@@ -68,6 +73,112 @@ const channel_def_t *channel_by_msp_index(uint8_t msp_index) {
 
 int channel_msp_index(const channel_def_t *def) {
     return (int)(def - g_channel_defs);
+}
+
+#ifdef EMULATOR_BUILD
+#define CHANNEL_SETS_FILE "channels.txt"
+#else
+#define CHANNEL_SETS_FILE "/mnt/extsd/channels.txt"
+#endif
+
+static void trim(char *s) {
+    char *start = s;
+    while (isspace((unsigned char)*start)) {
+        start++;
+    }
+    if (start != s) {
+        memmove(s, start, strlen(start) + 1);
+    }
+    size_t len = strlen(s);
+    while (len > 0 && isspace((unsigned char)s[len - 1])) {
+        s[--len] = '\0';
+    }
+}
+
+// Parses one "<set name> : <ch1>, <ch2>, ..." line into *set.
+// Returns false (line ignored) if it has no ':', no name, or no valid channels.
+static bool parse_channel_set_line(char *line, int line_no, channel_set_t *set) {
+    char *colon = strchr(line, ':');
+    if (colon == NULL) {
+        LOGE("%s line %d: missing ':' -- line ignored", CHANNEL_SETS_FILE, line_no);
+        return false;
+    }
+    *colon = '\0';
+    char *name_part = line;
+    char *list_part = colon + 1;
+    trim(name_part);
+    trim(list_part);
+
+    if (name_part[0] == '\0') {
+        LOGE("%s line %d: empty channel set name -- line ignored", CHANNEL_SETS_FILE, line_no);
+        return false;
+    }
+
+    snprintf(set->label, sizeof(set->label), "%s", name_part);
+    set->count = 0;
+
+    char *save = NULL;
+    for (char *tok = strtok_r(list_part, ",", &save); tok != NULL; tok = strtok_r(NULL, ",", &save)) {
+        trim(tok);
+        if (tok[0] == '\0') {
+            continue;
+        }
+        if (channel_by_name(tok) == NULL) {
+            LOGE("%s line %d: unknown channel '%s' -- ignored", CHANNEL_SETS_FILE, line_no, tok);
+            continue;
+        }
+        if (set->count >= MAX_CHANNEL_SET_SIZE) {
+            LOGE("%s line %d: set '%s' has more than %d channels -- extra ignored", CHANNEL_SETS_FILE, line_no, set->label, MAX_CHANNEL_SET_SIZE);
+            break;
+        }
+        snprintf(set->names[set->count], sizeof(set->names[0]), "%s", tok);
+        set->count++;
+    }
+
+    if (set->count == 0) {
+        LOGE("%s line %d: set '%s' has no valid channels -- line ignored", CHANNEL_SETS_FILE, line_no, set->label);
+        return false;
+    }
+    return true;
+}
+
+// Reads at most MAX_CHANNEL_SETS lines (extra lines beyond that are ignored).
+static uint8_t parse_channel_sets_file(FILE *file, channel_set_t *sets) {
+    uint8_t set_count = 0;
+    char line[256];
+
+    for (int line_no = 1; line_no <= MAX_CHANNEL_SETS && fgets(line, sizeof(line), file) != NULL; line_no++) {
+        line[strcspn(line, "\r\n")] = '\0';
+        if (line[0] == '\0') {
+            continue; // blank line -- still counts against the MAX_CHANNEL_SETS line cap
+        }
+        if (parse_channel_set_line(line, line_no, &sets[set_count])) {
+            set_count++;
+        }
+    }
+    return set_count;
+}
+
+void channel_sets_load(void) {
+    uint8_t set_count = 0;
+    FILE *file = fopen(CHANNEL_SETS_FILE, "r");
+    if (file != NULL) {
+        set_count = parse_channel_sets_file(file, g_channel_sets);
+        fclose(file);
+        if (set_count == 0) {
+            LOGE("%s: no valid channel sets found, falling back to defaults", CHANNEL_SETS_FILE);
+        }
+    }
+
+    if (set_count == 0) {
+        memcpy(g_channel_sets, default_channel_sets, sizeof(default_channel_sets));
+        set_count = sizeof(default_channel_sets) / sizeof(default_channel_sets[0]);
+        LOGI("Using %d default HDZero channel set(s)", set_count);
+    } else {
+        LOGI("Loaded %d HDZero channel set(s) from %s", set_count, CHANNEL_SETS_FILE);
+    }
+
+    g_channel_set_count = set_count;
 }
 
 uint8_t channel_set_size(uint8_t set_index) {
