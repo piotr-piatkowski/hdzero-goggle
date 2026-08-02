@@ -4,16 +4,12 @@
 extern "C" {
 #endif
 
+#include "core/channel_table.h"
 #include "ui/ui_main_menu.h"
 #include <lvgl/lvgl.h>
 
-#define HDZERO_CHANNEL_NUM (g_setting.source.hdzero_band == RACE_BAND ? 12 : 8)
+#define HDZERO_CHANNEL_NUM (channel_set_size(g_setting.source.hdzero_channel_set))
 #define ANALOG_CHANNEL_NUM 48
-
-typedef enum {
-    RACE_BAND = 0,
-    LOW_BAND = 1,
-} band_t;
 
 int scan(void);
 int scan_reinit(void);

@@ -9,6 +9,7 @@
 
 #include "../conf/targets.h"
 
+#include "core/channel_table.h"
 #include "core/self_test.h"
 #include "lang/language.h"
 #include "ui/page_common.h"
@@ -228,7 +229,7 @@ const setting_t g_setting_defaults = {
         .analog_channel = 33, // R1
         .analog_format = SETTING_SOURCES_ANALOG_FORMAT_NTSC,
         .analog_ratio = SETTING_SOURCES_ANALOG_RATIO_4_3,
-        .hdzero_band = SETTING_SOURCES_HDZERO_BAND_RACEBAND,
+        .hdzero_channel_set = 0, // "Race Band"
         .hdzero_bw = SETTING_SOURCES_HDZERO_BW_WIDE,
     },
     .language = {
@@ -354,10 +355,13 @@ void settings_load(void) {
     // source
     g_setting.source.analog_format = ini_getl("source", "analog_format", g_setting_defaults.source.analog_format, SETTING_INI);
     g_setting.source.analog_ratio = ini_getl("source", "analog_ratio", g_setting_defaults.source.analog_ratio, SETTING_INI);
-    g_setting.source.hdzero_band = ini_getl("source", "hdzero_band", g_setting_defaults.source.hdzero_band, SETTING_INI);
+    g_setting.source.hdzero_channel_set = ini_getl("source", "hdzero_band", g_setting_defaults.source.hdzero_channel_set, SETTING_INI);
+    if (g_setting.source.hdzero_channel_set >= g_channel_set_count) {
+        g_setting.source.hdzero_channel_set = 0;
+    }
     g_setting.source.hdzero_bw = ini_getl("source", "hdzero_bw", g_setting_defaults.source.hdzero_bw, SETTING_INI);
     g_setting.source.analog_channel = ini_getl("source", "analog_channel", g_setting_defaults.source.analog_channel, SETTING_INI);
-    if (g_setting.scan.channel > HDZERO_CHANNEL_NUM) {
+    if (g_setting.scan.channel > channel_set_size(g_setting.source.hdzero_channel_set)) {
         g_setting.scan.channel = 1;
     }
     if (g_setting.source.analog_channel > ANALOG_CHANNEL_NUM) {

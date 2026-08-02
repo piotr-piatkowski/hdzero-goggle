@@ -23,3 +23,5 @@ utilities/font/out
 # nix related
 result
 result-*
+/tz
+setting.ini

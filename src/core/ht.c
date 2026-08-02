@@ -15,6 +15,7 @@
 #include "osd.h"
 
 #include "bmi270/accel_gyro.h"
+#include "core/channel_table.h"
 #include "core/settings.h"
 #include "core/sleep_mode.h"
 #include "driver/beep.h"
@@ -134,9 +135,11 @@ static void detect_motion(bool is_moving) {
 
         if (cnt == 2) {
             if (g_hw_stat.source_mode == SOURCE_MODE_HDZERO) {
-                uint8_t ch = g_setting.scan.channel - 1;
                 HDZero_open(g_setting.source.hdzero_bw);
-                DM6302_SetChannel(g_setting.source.hdzero_band, ch & 0x7F);
+                uint8_t hw_band, hw_index;
+                if (channel_set_tune(g_setting.source.hdzero_channel_set, g_setting.scan.channel, &hw_band, &hw_index)) {
+                    DM6302_SetChannel(hw_band, hw_index);
+                }
             }
             if (g_hw_stat.source_mode == SOURCE_MODE_AV) {
                 rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);

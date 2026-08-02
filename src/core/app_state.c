@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "core/channel_table.h"
 #include "core/dvr.h"
 #include "core/input_device.h"
 #include "core/msp_displayport.h"
@@ -164,19 +165,21 @@ void app_switch_to_hdzero(bool is_default) {
 
     rtc6715.init(0, 0);
 
-    if (is_default) {
-        ch = g_setting.scan.channel - 1;
-    } else {
+    if (!is_default) {
         ch = valid_channel_tb[user_select_index];
         g_setting.scan.channel = ch + 1;
         ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
     }
 
     HDZero_open(g_setting.source.hdzero_bw);
-    ch &= 0x7f;
 
-    LOGI("switch to bw:%d, band:%d, ch:%d, CAM_MODE=%d 4:3=%d", g_setting.source.hdzero_bw, g_setting.source.hdzero_band, g_setting.scan.channel, CAM_MODE, cam_4_3);
-    DM6302_SetChannel(g_setting.source.hdzero_band, ch);
+    LOGI("switch to bw:%d, channel_set:%d, ch:%d, CAM_MODE=%d 4:3=%d", g_setting.source.hdzero_bw, g_setting.source.hdzero_channel_set, g_setting.scan.channel, CAM_MODE, cam_4_3);
+    {
+        uint8_t hw_band, hw_index;
+        if (channel_set_tune(g_setting.source.hdzero_channel_set, g_setting.scan.channel, &hw_band, &hw_index)) {
+            DM6302_SetChannel(hw_band, hw_index);
+        }
+    }
     DM5680_clear_vldflg();
     DM5680_req_vldflg();
     progress_bar.start = 0;
@@ -231,11 +234,13 @@ void app_switch_to_hdzero(bool is_default) {
     system_script(REC_STOP_LIVE);
 }
 
+// channel: 1-based position within the active channel set (g_setting.scan.channel)
 void hdzero_switch_channel(int channel) {
-    channel &= 0x7f;
-
-    LOGI("hdzero_switch_channel to bw:%d, band:%d, ch:%d, CAM_MODE=%d 4:3=%d", g_setting.source.hdzero_bw, g_setting.source.hdzero_band, channel, CAM_MODE, cam_4_3);
-    DM6302_SetChannel(g_setting.source.hdzero_band, channel);
+    LOGI("hdzero_switch_channel to bw:%d, channel_set:%d, ch:%d, CAM_MODE=%d 4:3=%d", g_setting.source.hdzero_bw, g_setting.source.hdzero_channel_set, channel, CAM_MODE, cam_4_3);
+    uint8_t hw_band, hw_index;
+    if (channel_set_tune(g_setting.source.hdzero_channel_set, channel, &hw_band, &hw_index)) {
+        DM6302_SetChannel(hw_band, hw_index);
+    }
     DM5680_clear_vldflg();
     DM5680_req_vldflg();
     channel_osd_mode = CHANNEL_SHOWTIME;

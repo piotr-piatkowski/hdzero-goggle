@@ -18,6 +18,7 @@
 
 #include "core/app_state.h"
 #include "core/battery.h"
+#include "core/channel_table.h"
 #include "core/common.hh"
 #include "core/dvr.h"
 #include "core/elrs.h"
@@ -368,13 +369,8 @@ void osd_analog_rssi_show(bool bShow) {
 //  = 0x00 | Channel Show Time
 uint8_t channel_osd_mode;
 
-char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel) // channel=[1:18]
+char *channel2str(uint8_t is_hdzero, uint8_t channel_set, uint8_t channel) // channel=[1:18]
 {
-    static char *hdzero_channel_name[2][BASE_CH_NUM] = {
-        {"R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "E1", "F1", "F2", "F4"},
-        {"L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "  ", "  ", "  ", "  "},
-    };
-
     static char *analog_channel_name[48] = {
         "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8",
         "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8",
@@ -384,10 +380,9 @@ char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel) // cha
         "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"};
 
     if (is_hdzero) {
-        if ((channel > 0) && (channel <= HDZERO_CHANNEL_NUM))
-            return hdzero_channel_name[is_lowband][channel - 1];
-        else
-            return hdzero_channel_name[is_lowband][0];
+        if (channel == 0 || channel > channel_set_size(channel_set))
+            channel = 1;
+        return (char *)channel_set_channel_name(channel_set, channel);
     } else {
         return analog_channel_name[channel - 1];
     }
@@ -401,7 +396,7 @@ void osd_channel_show(bool bShow) {
     if (channel_osd_mode & 0x80) {
         ch = channel_osd_mode & 0x7F;
         color = lv_color_make(0xFF, 0x20, 0x20);
-        snprintf(buf, sizeof(buf), "  To %s?  ", channel2str(g_source_info.source == SOURCE_HDZERO, g_setting.source.hdzero_band, ch));
+        snprintf(buf, sizeof(buf), "  To %s?  ", channel2str(g_source_info.source == SOURCE_HDZERO, g_setting.source.hdzero_channel_set, ch));
         lv_obj_set_style_bg_opa(g_osd_hdzero.channel[is_fhd], LV_OPA_100, 0);
     } else {
         if (g_source_info.source == SOURCE_HDZERO) {
@@ -420,7 +415,7 @@ void osd_channel_show(bool bShow) {
 
         if (bShow) {
             color = lv_color_make(0xFF, 0xFF, 0xFF);
-            snprintf(buf, sizeof(buf), "CH:%s", channel2str(g_source_info.source == SOURCE_HDZERO, g_setting.source.hdzero_band, ch));
+            snprintf(buf, sizeof(buf), "CH:%s", channel2str(g_source_info.source == SOURCE_HDZERO, g_setting.source.hdzero_channel_set, ch));
             lv_obj_set_style_bg_opa(g_osd_hdzero.channel[is_fhd], 0, 0);
         }
     }

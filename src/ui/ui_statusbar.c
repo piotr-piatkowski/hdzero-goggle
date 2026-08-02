@@ -136,7 +136,7 @@ int statusbar_init(void) {
     lv_label_set_recolor(label[STS_SDCARD], true);
 
     if (g_source_info.source == SOURCE_HDZERO) {
-        snprintf(buf, sizeof(buf), "%s: HDZero %s", _lang("RF"), channel2str(1, g_setting.source.hdzero_band, g_setting.scan.channel & 0x7F));
+        snprintf(buf, sizeof(buf), "%s: HDZero %s", _lang("RF"), channel2str(1, g_setting.source.hdzero_channel_set, g_setting.scan.channel & 0x7F));
     } else if (g_source_info.source == SOURCE_HDMI_IN) {
         snprintf(buf, sizeof(buf), "HDMI %s", _lang("In"));
     } else if (g_source_info.source == SOURCE_AV_IN) {
@@ -219,12 +219,12 @@ void statubar_update(void) {
     static int hdzero_channel_last = 0;
     static int analog_channel_last = 0;
     static source_t source_last = SOURCE_HDZERO;
-    static setting_sources_hdzero_band_t hdzero_band_last = SETTING_SOURCES_HDZERO_BAND_RACEBAND;
+    static uint8_t hdzero_band_last = 0;
     uint8_t channel_changed = (hdzero_channel_last != g_setting.scan.channel) || (analog_channel_last != g_setting.source.analog_channel);
-    if (channel_changed || (source_last != g_source_info.source) || (hdzero_band_last != g_setting.source.hdzero_band)) {
+    if (channel_changed || (source_last != g_source_info.source) || (hdzero_band_last != g_setting.source.hdzero_channel_set)) {
         memset(buf, 0, sizeof(buf));
         if (g_source_info.source == SOURCE_HDZERO) {
-            snprintf(buf, sizeof(buf), "%s: HDZero %s", _lang("RF"), channel2str(1, g_setting.source.hdzero_band, g_setting.scan.channel & 0x7F));
+            snprintf(buf, sizeof(buf), "%s: HDZero %s", _lang("RF"), channel2str(1, g_setting.source.hdzero_channel_set, g_setting.scan.channel & 0x7F));
         } else if (g_source_info.source == SOURCE_HDMI_IN) {
             snprintf(buf, sizeof(buf), "HDMI %s", _lang("In"));
         } else if (g_source_info.source == SOURCE_AV_IN) {
@@ -245,7 +245,7 @@ void statubar_update(void) {
     hdzero_channel_last = g_setting.scan.channel;
     analog_channel_last = g_setting.source.analog_channel;
     source_last = g_source_info.source;
-    hdzero_band_last = g_setting.source.hdzero_band;
+    hdzero_band_last = g_setting.source.hdzero_channel_set;
 
     if (page_storage_is_sd_repair_active()) {
         lv_img_set_src(img_sdc, &img_sdcard);

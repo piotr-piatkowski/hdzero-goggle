@@ -9,6 +9,7 @@
 #include "../conf/ui.h"
 
 #include "core/app_state.h"
+#include "core/channel_table.h"
 #include "core/common.hh"
 #include "core/dvr.h"
 #include "core/osd.h"
@@ -151,8 +152,13 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     snprintf(buf, sizeof(buf), "AV %s", _lang("In"));
     label[3] = create_label_item(cont, buf, 1, ROW_AV, 3);
 
-    create_btn_group_item(&btn_group1, cont, 2, _lang("HDZero Band"), _lang("Raceband"), _lang("Lowband"), "", "", ROW_HDZ_BAND);
-    btn_group_set_sel(&btn_group1, g_setting.source.hdzero_band);
+    {
+        const char *set_label1 = g_channel_set_count > 1 ? g_channel_sets[1].label : "";
+        const char *set_label2 = g_channel_set_count > 2 ? g_channel_sets[2].label : "";
+        create_btn_group_item(&btn_group1, cont, g_channel_set_count, _lang("HDZero Band"),
+                               _lang(g_channel_sets[0].label), _lang(set_label1), _lang(set_label2), "", ROW_HDZ_BAND);
+        btn_group_set_sel(&btn_group1, g_setting.source.hdzero_channel_set);
+    }
 
     create_btn_group_item(&btn_group2, cont, 2, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), "", "", ROW_HDZ_WIDTH);
     btn_group_set_sel(&btn_group2, g_setting.source.hdzero_bw);
@@ -199,21 +205,11 @@ void source_status_timer() {
         return;
 
     ch = g_setting.scan.channel & 0x7F;
-    if (g_setting.source.hdzero_band == SETTING_SOURCES_HDZERO_BAND_RACEBAND) {
-        if (ch <= 8) {
-            snprintf(buf, sizeof(buf), "HDZero: R%d", ch);
-        } else if (ch <= 12) {
-            snprintf(buf, sizeof(buf), "HDZero: F%d", (ch - 8) * 2);
-        } else {
-            g_setting.scan.channel = 1;
-            snprintf(buf, sizeof(buf), "HDZero: R1");
-        }
-    } else {
-        if (ch > 8) {
-            g_setting.scan.channel = 1;
-        }
-        snprintf(buf, sizeof(buf), "HDZero: L%d", ch);
+    if (ch == 0 || ch > channel_set_size(g_setting.source.hdzero_channel_set)) {
+        ch = 1;
+        g_setting.scan.channel = 1;
     }
+    snprintf(buf, sizeof(buf), "HDZero: %s", channel_set_channel_name(g_setting.source.hdzero_channel_set, ch));
     lv_label_set_text(label[0], buf);
 
 #if defined(HDZGOGGLE)
@@ -332,9 +328,12 @@ static void page_source_on_click(uint8_t key, int sel) {
         break;
     case ROW_HDZ_BAND:
         btn_group_toggle_sel(&btn_group1);
-        g_setting.source.hdzero_band = btn_group_get_sel(&btn_group1);
+        g_setting.source.hdzero_channel_set = btn_group_get_sel(&btn_group1);
+        if (g_setting.scan.channel > channel_set_size(g_setting.source.hdzero_channel_set)) {
+            g_setting.scan.channel = 1;
+        }
         page_scannow_set_channel_label();
-        ini_putl("source", "hdzero_band", g_setting.source.hdzero_band, SETTING_INI);
+        ini_putl("source", "hdzero_band", g_setting.source.hdzero_channel_set, SETTING_INI);
         break;
     case ROW_HDZ_WIDTH:
         btn_group_toggle_sel(&btn_group2);

@@ -157,28 +157,16 @@ static void create_channel_switch(lv_obj_t *parent, int col, int row, channel_t 
 }
 
 void page_scannow_set_channel_label(void) {
-    static const char *race_band_channel_str[] = {"R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "E1", "F1", "F2", "F4"};
-    static const char *low_band_channel_str[] = {"L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"};
-    uint8_t i;
+    uint8_t const set = g_setting.source.hdzero_channel_set;
+    uint8_t const count = channel_set_size(set);
 
-    // set channel label
-    if (g_setting.source.hdzero_band == RACE_BAND) {
-        // race band
-        for (i = 0; i < BASE_CH_NUM; i++) {
-            lv_label_set_text(channel_tb[i].label, race_band_channel_str[i]);
-        }
-
-        for (i = 8; i < BASE_CH_NUM; i++) {
+    for (uint8_t i = 0; i < BASE_CH_NUM; i++) {
+        if (i < count) {
+            lv_label_set_text(channel_tb[i].label, channel_set_channel_name(set, i + 1));
             lv_obj_clear_flag(channel_tb[i].img0, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(channel_tb[i].img1, LV_OBJ_FLAG_HIDDEN);
-        }
-    } else {
-        // lowband
-        for (i = 0; i < 8; i++) {
-            lv_label_set_text(channel_tb[i].label, low_band_channel_str[i]);
-        }
-        for (i = 8; i < BASE_CH_NUM; i++) {
+        } else {
             lv_obj_add_flag(channel_tb[i].img0, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(channel_tb[i].img1, LV_OBJ_FLAG_HIDDEN);
@@ -262,16 +250,18 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_set_style_grid_row_dsc_array(cont2, row_dsc2, 0);
 
     // create channel
+    // Two columns of up to (BASE_CH_NUM / 2) rows each: fill the left column
+    // top-to-bottom first, then the right column, so the on-screen order
+    // matches the channel set's order instead of interleaving groups of 4.
     uint8_t col_offset = 1;
-    uint8_t row_offset = 0;
+    uint8_t col_left = col_offset;
+    uint8_t col_right = 4 + col_offset;
+    uint8_t rows_per_col = BASE_CH_NUM / 2;
 
-    for (int i = 0; i < 8; i++) {
-        create_channel_switch(cont2, ((i >> 2) << 2) + col_offset, i & 0x03, &channel_tb[i]);
-    }
-
-    row_offset = 4;
-    for (int i = 0; i < 4; i++) {
-        create_channel_switch(cont2, ((i >> 1) << 2) + col_offset, row_offset + (i & 0x01), &channel_tb[8 + i]);
+    for (int i = 0; i < BASE_CH_NUM; i++) {
+        uint8_t col = (i < rows_per_col) ? col_left : col_right;
+        uint8_t row = (i < rows_per_col) ? i : i - rows_per_col;
+        create_channel_switch(cont2, col, row, &channel_tb[i]);
     }
     page_scannow_set_channel_label();
 
@@ -300,11 +290,11 @@ uint8_t max4(uint8_t a1, uint8_t a2, uint8_t a3, uint8_t a4) {
     return (b1 > b2) ? b1 : b2;
 }
 
-void scan_channel(band_t band, uint8_t channel, uint8_t *gain_ret, bool *valid) {
+void scan_channel(uint8_t hw_band, uint8_t hw_index, uint8_t *gain_ret, bool *valid) {
     uint8_t vld0, vld1;
     uint8_t gain[4];
 
-    DM6302_SetChannel(band, channel);
+    DM6302_SetChannel(hw_band, hw_index);
 
     usleep(100000);
     DM5680_clear_vldflg();
@@ -317,7 +307,7 @@ void scan_channel(band_t band, uint8_t channel, uint8_t *gain_ret, bool *valid) 
     vld1 = rx_status[1].rx_valid;
     *valid = vld0 | vld1;
 
-    LOGI("Scan band:%d, channel%d: valid:%d, gain:%d", band, channel, *valid, *gain_ret);
+    LOGI("Scan band:%d, channel%d: valid:%d, gain:%d", hw_band, hw_index, *valid, *gain_ret);
 }
 
 int8_t scan_now(void) {
@@ -344,7 +334,11 @@ int8_t scan_now(void) {
     lv_timer_handler();
 
     for (ch = 0; ch < HDZERO_CHANNEL_NUM; ch++) {
-        scan_channel(g_setting.source.hdzero_band, ch, &gain, &valid);
+        uint8_t hw_band, hw_index;
+        if (!channel_set_tune(g_setting.source.hdzero_channel_set, ch + 1, &hw_band, &hw_index)) {
+            continue;
+        }
+        scan_channel(hw_band, hw_index, &gain, &valid);
         if (valid) {
             channel_status_tb[ch].is_valid = 1;
             channel_status_tb[ch].gain = gain;

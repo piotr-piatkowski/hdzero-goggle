@@ -249,10 +249,6 @@ typedef enum {
     SETTING_SOURCES_ANALOG_RATIO_16_9 = 1
 } setting_sources_analog_ratio_t;
 typedef enum {
-    SETTING_SOURCES_HDZERO_BAND_RACEBAND = 0,
-    SETTING_SOURCES_HDZERO_BAND_LOWBAND = 1
-} setting_sources_hdzero_band_t;
-typedef enum {
     SETTING_SOURCES_HDZERO_BW_WIDE = 0,
     SETTING_SOURCES_HDZERO_BW_NARROW = 1
 } setting_sources_hdzero_bw_t;
@@ -261,7 +257,7 @@ typedef struct {
     setting_sources_analog_module_t analog_module;
     setting_sources_analog_format_t analog_format; // 0=NTSC, 1= PAL
     setting_sources_analog_ratio_t analog_ratio;   // 0=4:3, 1=16:9
-    setting_sources_hdzero_band_t hdzero_band;
+    uint8_t hdzero_channel_set;                    // index into g_channel_sets (channel_table.h)
     setting_sources_hdzero_bw_t hdzero_bw;
     uint8_t analog_channel;
 } setting_sources_t;

@@ -148,7 +148,7 @@ void tune_channel(uint8_t action) {
                 g_setting.scan.channel = channel;
                 ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
                 dvr_cmd(DVR_STOP);
-                hdzero_switch_channel(g_setting.scan.channel - 1);
+                hdzero_switch_channel(g_setting.scan.channel);
                 if (action == DIAL_KEY_PRESS) {
                     msp_channel_update();
                 }
